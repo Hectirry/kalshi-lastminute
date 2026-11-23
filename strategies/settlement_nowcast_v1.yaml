@@ -1,0 +1,28 @@
+# Variante base. Para crear otra: copia este archivo con otro nombre, cambia
+# parámetros y deja `module` apuntando al mismo .py. Cada variante lleva su
+# propio registro de decisiones y operaciones.
+enabled: true
+module: settlement_nowcast_v1
+
+params:
+  # Ventana de entrada, en segundos antes del cierre.
+  max_secs_left: 90
+  min_secs_left: 5
+
+  min_edge: 0.03            # edge neto de fees mínimo por contrato (en dólares por $1 de pago)
+  stake_usd: 25             # capital por operación; contratos = stake / precio
+  max_depth_fraction: 1.0   # fracción máxima del mejor nivel que se intenta tomar
+  min_contracts: 1
+
+  # Banda de precios. SUPUESTO heredado de polybot: fuera de ella el pago es
+  # lotería (muy barato) o no compensa el riesgo (muy caro).
+  min_price: 0.05
+  max_price: 0.95
+
+  # Modelo
+  vol_lookback_s: 300       # segundos para la volatilidad realizada
+  vol_min_points: 120       # con menos segundos de historia no se decide (arranque en frío)
+  vol_floor_bps: 0.05       # piso de volatilidad por segundo
+  vol_mult: 1.0             # SUPUESTO: sin ajuste por colas gordas
+  index_error_bps: 0.2      # SUPUESTO: error residual del índice (redondeo, desfase)
+  max_index_age_ms: 3000    # con un índice más viejo que esto no se decide

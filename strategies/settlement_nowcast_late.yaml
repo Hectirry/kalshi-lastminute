@@ -1,0 +1,24 @@
+# Variante: solo entra en los últimos 30 s, cuando al menos la mitad del
+# promedio de liquidación ya está fijada. Aísla la tesis "veo el valor final
+# antes que el precio" de la simple discrepancia modelo-mercado a 90 s.
+enabled: true
+module: settlement_nowcast_v1
+
+params:
+  max_secs_left: 30
+  min_secs_left: 3
+
+  min_edge: 0.03
+  stake_usd: 25
+  max_depth_fraction: 1.0
+  min_contracts: 1
+
+  min_price: 0.05
+  max_price: 0.95
+
+  vol_lookback_s: 300
+  vol_min_points: 120
+  vol_floor_bps: 0.05
+  vol_mult: 1.0
+  index_error_bps: 0.2
+  max_index_age_ms: 3000

@@ -1,0 +1,12 @@
+.env
+*.pem
+*.key
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+data/
+reports/*
+!reports/.gitkeep
+Claude_Bot.txt
+config.local.yaml

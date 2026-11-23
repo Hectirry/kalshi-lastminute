@@ -1,0 +1,109 @@
+# kalshi-lastminute — configuración. Los secretos van en .env, no aquí.
+# Las claves marcadas SUPUESTO no se pudieron confirmar con fuente oficial;
+# ver docs/RESEARCH.md.
+
+mode: paper            # único modo soportado: no existe código de órdenes reales
+
+notices:               # se imprimen en consola al arrancar
+  - "No está confirmado que un residente en Colombia pueda abrir cuenta y operar en Kalshi (docs/RESEARCH.md §4). Esto es solo paper trading."
+
+fees:
+  taker_rate: 0.07       # fee = redondeo_arriba(multiplier × taker_rate × C × P × (1−P))
+  multiplier: 1          # /series/KXBTC15M: fee_type=quadratic, fee_multiplier=1
+  round_to: 0.01         # SUPUESTO: al centavo por orden (la opción más cara); la regla nueva sería 0.0001
+
+# Activos grabados: serie de 15 min en Kalshi y símbolo en cada exchange.
+# Las tres series liquidan igual: promedio de 60 s del índice en tiempo real de
+# CF Benchmarks (BRTI, ETHUSD_RTI, SOLUSD_RTI). Verificado en rules_primary.
+assets:
+  BTC:
+    series: KXBTC15M
+    index_id: BRTI          # índice oficial en el canal cfbenchmarks_value de Kalshi
+    symbols: {coinbase: BTC-USD, kraken: BTC/USD, bitstamp: btcusd, gemini: btcusd, binance: btcusdt}
+  ETH:
+    series: KXETH15M
+    index_id: ETHUSD_RTI          # índice oficial en el canal cfbenchmarks_value de Kalshi
+    symbols: {coinbase: ETH-USD, kraken: ETH/USD, bitstamp: ethusd, gemini: ethusd, binance: ethusdt}
+  SOL:
+    series: KXSOL15M
+    index_id: SOLUSD_RTI          # índice oficial en el canal cfbenchmarks_value de Kalshi
+    symbols: {coinbase: SOL-USD, kraken: SOL/USD, bitstamp: solusd, gemini: solusd, binance: solusdt}
+
+kalshi:
+  env: prod            # prod | demo. La estrategia solo tiene sentido con datos de prod.
+  endpoints:
+    prod:
+      rest: https://external-api.kalshi.com/trade-api/v2
+      ws: wss://external-api-ws.kalshi.com/trade-api/ws/v2
+    demo:
+      rest: https://external-api.demo.kalshi.co/trade-api/v2
+      ws: wss://external-api-ws.demo.kalshi.co/trade-api/ws/v2
+  discovery_interval_s: 10      # cada cuánto se busca el mercado activo
+  book_poll_slow_s: 3.0         # polling REST del libro lejos del cierre
+  book_poll_fast_s: 0.5         # polling REST del libro en la ventana final
+  fast_window_s: 120            # ventana final: polling rápido (REST) o muestreo fino del libro (WS)
+  book_sample_ms: 100           # WS, ventana final: intervalo mínimo entre snapshots guardados
+  book_top_levels: 10           # WS, ventana final: niveles por lado que se guardan
+  settlement_poll_s: 5          # cada cuánto se consulta el resultado tras el cierre
+  settlement_give_up_s: 1800    # se deja de consultar el resultado tras este tiempo
+
+engine:
+  eval_interval_ms: 250         # cada cuánto se evalúa cada estrategia en cada mercado
+  latency_ms: 300               # latencia simulada entre decidir y llegar al libro
+  max_slippage: 0.0             # cuánto peor que el precio visto se acepta llenar (0 = la orden se pierde)
+  index_source: oficial         # oficial (canal de Kalshi) | composite. Si el oficial falta, usa composite.
+  dashboard:
+    host: 127.0.0.1
+    port: 8000
+
+# Calculadora de rentabilidad (python -m tools.breakeven)
+breakeven:
+  fixed_costs_usd:              # costos fijos mensuales
+    vps: 10
+    datos: 0
+    otros: 0
+  monthly_targets_usd: [100, 500]   # metas de ganancia neta al mes
+  bootstrap_samples: 5000
+  confidence: 0.95
+  min_trades: 100               # con menos operaciones cerradas no hay veredicto
+  reference_edge_per_usd: 0.02  # edge de referencia para "cuántas operaciones hacen falta"
+  drawdown_reserve_mult: 2.0    # SUPUESTO: reserva = 2 × la peor racha observada
+
+network:
+  # El DNS del proveedor bloquea kalshi.com. Por decisión explícita del usuario
+  # (2026-11-22) el bot resuelve SOLO estos dominios por DNS-over-HTTPS.
+  # No modifica Windows. Poner enabled: false para volver al DNS del sistema.
+  dns_override:
+    enabled: true
+    doh_url: https://1.1.1.1/dns-query
+    hosts: [kalshi.com]
+
+settlement:
+  window_s: 60                  # promedio de los 60 s previos al cierre (reglas del mercado)
+  # Confirmado con el canal oficial de Kalshi: la ventana es [cierre-60s, cierre),
+  # con fin exclusivo (window_start_ts_ms / window_end_ts_exclusive).
+
+index:
+  # Peso de cada exchange en nuestra aproximación del índice (igual para los tres
+  # activos). Peso 0 = se graba
+  # pero no entra al índice.
+  # SUPUESTO: los constituyentes de los índices de ETH y SOL no se verificaron;
+  # se asumen los mismos exchanges que BRTI.
+  # SUPUESTO: CF Benchmarks pondera por libro de órdenes con una fórmula propia;
+  # aquí usamos promedio simple de mids. El error real se mide contra
+  # expiration_value en cada liquidación (python -m kalshi_lastminute.summary).
+  weights:
+    coinbase: 1.0
+    kraken: 1.0
+    bitstamp: 1.0
+    gemini: 1.0
+    binance: 0.0                # pares contra USDT: no son USD ni constituyentes; solo referencia
+  stale_ms: 3000                # una fuente sin datos por más de esto sale del índice
+  tick_min_interval_ms: 200     # máximo una fila cruda por fuente en este intervalo
+
+storage:
+  db_path: data/kalshi_lastminute.db
+  flush_interval_s: 1.0
+
+logging:
+  status_interval_s: 60
