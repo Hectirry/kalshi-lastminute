@@ -105,6 +105,8 @@ Todos se escriben en `reports/` y se imprimen en consola.
 | `python -m tools.breakeven` | `breakeven.md` | Cuánto capital hace falta y si hay evidencia de edge |
 | `python -m tools.breakeven --replay` | `breakeven_replay.md` | Lo mismo, con las operaciones del replay |
 | `python -m kalshi_lastminute.summary` | (consola) | Calidad de los datos grabados y error del índice |
+| `python -m tools.backfill` | `data/history.db` | Descarga ~2 meses de mercados liquidados y velas de 1 minuto de la API pública de Kalshi |
+| `python -m tools.calibration` | `calibracion_mercado.md` | Si el precio de Kalshi está bien calibrado cerca del cierre y qué gana un taker por rango de precio |
 
 ### Cómo leer `kpis.md` y `replay_*.md`
 
@@ -116,6 +118,14 @@ Lo primero es la línea en negrita. Con menos de 100 operaciones cerradas dice "
 - **Calibración**: para las operaciones donde el modelo daba, por ejemplo, 80–90 % al lado comprado, qué fracción ganó de verdad. Si gana bastante menos de lo que dice el modelo, el modelo está sobreconfiado.
 - **Razones para no entrar**: `precio_fuera_de_banda` (el lado ya vale más de 0.95 o menos de 0.05), `edge_bajo`, `liquidez_baja`, `indice_viejo`, `sin_volatilidad` (menos de 2 minutos de historia), `sin_libro`, `sin_strike`.
 - **Por qué se perdieron órdenes**: `precio_se_fue` (el nivel desapareció), `sin_oferta`, `mercado_cerrado`, `sin_libro`, `reinicio`.
+
+### Cómo leer `calibracion_mercado.md`
+
+Usa el histórico público, no nuestra grabación: miles de mercados, pero con una cotización por minuto, sin latencia ni profundidad.
+
+- **Calibración**: para cada rango de precio de YES, qué fracción cerró YES. Si la columna `z` queda entre −2 y 2, el precio es un buen estimador y no hay sesgo que explotar.
+- **Comprar al ask como taker**: P&L medio por contrato, neto de fees, según el precio pagado. Un rango solo interesa si todo su intervalo de confianza es positivo (marcado con ✔) y además se repite en varios horizontes.
+- Lo negativo aquí es negativo de verdad. Lo positivo es un techo: en vivo hay que restarle la latencia y la profundidad.
 
 ### Cómo leer `breakeven.md`
 

@@ -29,6 +29,8 @@ Windows; el intérprete es el del venv.
 .venv\Scripts\python -m kalshi_lastminute.replay --strategy <variante> [--param k=v] [--latency-ms N]
 .venv\Scripts\python -m tools.breakeven [--replay]                   # capital necesario y evidencia de edge
 .venv\Scripts\python -m kalshi_lastminute.summary                    # calidad de datos y error del índice
+.venv\Scripts\python -m tools.backfill [--days N]                       # histórico público -> data/history.db
+.venv\Scripts\python -m tools.calibration                               # calibración del mercado cerca del cierre
 ```
 
 - Solo puede correr un `run` o `recorder` a la vez (candado en el puerto local 47615). Los reportes y el replay abren la base en solo lectura y se pueden lanzar con el bot encendido.
@@ -57,6 +59,8 @@ kalshi_lastminute/
   replay.py                   backtest sobre la data grabada
   summary.py                  resumen de datos grabados
 tools/breakeven.py            calculadora de rentabilidad
+tools/backfill.py             descarga mercados liquidados y velas de 1 min (API pública) a data/history.db
+tools/calibration.py          calibración del precio de Kalshi y retorno de un taker por rango de precio
 tests/                        herméticos, sin red
 data/   reports/              bases, logs y reportes (fuera de Git)
 ```
@@ -72,6 +76,9 @@ data/   reports/              bases, logs y reportes (fuera de Git)
 - El libro por WebSocket recibe más de mil cambios por segundo en BTC. No guardes una fila por cambio: `orderbook_snapshots` guarda el libro completo cada 5 s y, en los últimos `fast_window_s`, los mejores niveles cada `book_sample_ms`.
 - El `seq` del WebSocket de Kalshi cuenta todos los mensajes de una suscripción, incluidos los `ok`.
 - Los errores y distancias entre activos se comparan en bps, no en USD.
+- Histórico público de Kalshi: `/markets?status=settled` cubre ~2 meses; antes de `/historical/cutoff` hay que usar `/historical/markets`. `/markets/candlesticks` acepta varios tickers con tope de 10 000 velas por petición (24 mercados consecutivos). Sin firma, más de ~5 peticiones/s devuelve 429.
+- `data/history.db` es una base aparte de la del bot: no escribas histórico en `kalshi_lastminute.db` mientras el bot corre.
+- Resultado de referencia (19 689 mercados, sep–nov 2026): el precio está bien calibrado de 1 a 10 min del cierre y comprar al ask pierde en todos los rangos de precio. Una variante que solo use el precio de Kalshi no tiene edge; solo vale la pena probar información que el precio aún no refleje.
 
 ## Convenciones
 
