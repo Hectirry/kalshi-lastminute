@@ -81,3 +81,48 @@ def test_load_picks_the_candle_k_minutes_before_close(tmp_path):
     assert load(conn, 1)[0]["yes_bid"] == 0.80
     assert load(conn, 2)[0]["yes_bid"] == 0.70
     assert load(conn, 5) == []
+
+
+# ── flujo de trades ─────────────────────────────────────────────────────
+def test_parse_ts_handles_variable_fraction_length():
+    from tools.flowdata import parse_ts
+    base = parse_ts("2026-11-23T03:56:24Z")
+    assert parse_ts("2026-11-23T03:56:24.37Z") == base + 370
+    assert parse_ts("2026-11-23T03:59:58.095147Z") == base + 214_095
+
+
+def test_aggregate_trades_prices_each_side_and_marks_out_to_later_prices():
+    from tools.flowdata import aggregate_trades
+    close = 1_000_000_000
+    trades = [
+        (close - 50_000, "yes", 0.60, 10.0),   # tomador compra YES a 0.60
+        (close - 44_000, "no", 0.70, 4.0),     # 6 s después: tomador compra NO a 0.30 (YES a 0.70)
+        (close - 10_000, "yes", 0.90, 1.0),    # 40 s después del primero
+    ]
+    agg = aggregate_trades(trades, close, "yes")
+    n, contracts, cost, pvar, mk5, mk30 = agg[(45, "yes", 7)]          # tramo 45–60 s, precio 0.60–0.70
+    assert (n, contracts) == (1, 10.0)
+    assert cost == pytest.approx(6.0) and pvar == pytest.approx(10 * 0.6 * 0.4)
+    assert mk5 == pytest.approx(10 * (0.70 - 0.60))                    # primer trade a ≥5 s: YES a 0.70
+    assert mk30 == pytest.approx(10 * (0.90 - 0.60))                   # primer trade a ≥30 s: YES a 0.90
+    n, contracts, cost, pvar, mk5, mk30 = agg[(30, "no", 4)]           # NO pagado a 0.30
+    assert cost == pytest.approx(4 * 0.30)
+    assert mk5 == pytest.approx(4 * ((1 - 0.90) - 0.30))               # el NO vale 0.10 después
+    # el último trade no tiene trades posteriores: se valora contra el resultado (YES = 1)
+    assert agg[(10, "yes", 10)][4] == pytest.approx(1.0 - 0.90)
+
+
+def test_flow_summary_maker_is_mirror_of_taker_gross():
+    from tools.flow import summarize
+    rows = []
+    for i in range(30):
+        res = "yes" if i % 2 else "no"
+        rows.append({"ticker": f"T{i}", "tbucket": 0, "side": "yes", "pbucket": 5, "n": 1,
+                     "contracts": 100.0, "cost": 55.0, "pvar": 100 * 0.55 * 0.45,
+                     "mk5": 0.0, "mk30": 0.0, "asset": "BTC", "result": res, "close_ms": i})
+    s = summarize(rows, lambda r: "todos", 0.07)[0]
+    assert s["gross"] == pytest.approx(0.5 - 0.55)                     # gana la mitad, paga 0.55
+    assert s["fee"] == pytest.approx(0.07 * 0.55 * 0.45)
+    assert s["net"] == pytest.approx(s["gross"] - s["fee"])
+    assert s["maker"] == pytest.approx(-s["gross"])
+    assert s["maker_lo"] <= s["maker"] <= s["maker_hi"]

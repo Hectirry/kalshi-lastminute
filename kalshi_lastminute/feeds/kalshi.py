@@ -190,7 +190,8 @@ def parse_index_value(msg: dict) -> tuple[str, int, float] | None:
 
 async def run_kalshi_ws(session: aiohttp.ClientSession, ws_url: str, private_key,
                         get_tickers, on_book, on_index, status: dict,
-                        index_ids: list[str]) -> None:
+                        index_ids: list[str], update_interval_ms: int | None = None,
+                        stale_s: float = 5.0) -> None:
     """WebSocket autenticado de SOLO LECTURA: libros en tiempo real e índice oficial.
 
     get_tickers() -> conjunto de tickers activos.
@@ -198,6 +199,11 @@ async def run_kalshi_ws(session: aiohttp.ClientSession, ws_url: str, private_key
     on_index(mensaje crudo) por cada valor del índice de CF Benchmarks.
     status["live"] es el conjunto de tickers cuyo libro llega en tiempo real;
     para los demás el grabador sigue con polling REST.
+
+    Un libro por deltas solo vale si no se pierde ningún mensaje. Por eso se
+    reconecta (y se pide snapshot nuevo) ante un salto de `seq` o si el servidor
+    avisa de que descartó mensajes, y un ticker sin mensajes en `stale_s`
+    segundos deja de contarse como "en vivo".
     """
     backoff = 1.0
     while True:
@@ -212,15 +218,20 @@ async def run_kalshi_ws(session: aiohttp.ClientSession, ws_url: str, private_key
                 books: dict[str, BookState] = {}
                 seqs: dict[int, int] = {}
                 subscribed: set[str] = set()
+                last_msg: dict[str, float] = {}
                 cmd_id = 1
                 while True:
                     wanted = get_tickers()
                     for ticker in wanted - subscribed:
                         cmd_id += 1
-                        await ws.send_json({"id": cmd_id, "cmd": "subscribe", "params": {
-                            "channels": ["orderbook_delta"], "market_ticker": ticker}})
+                        params = {"channels": ["orderbook_delta"], "market_ticker": ticker}
+                        if update_interval_ms:
+                            params["update_interval_ms"] = update_interval_ms
+                        await ws.send_json({"id": cmd_id, "cmd": "subscribe", "params": params})
                         subscribed.add(ticker)
                     status["live"] &= wanted  # los mercados cerrados dejan de estar en vivo
+                    now = time.time()
+                    status["live"] -= {t for t in status["live"] if now - last_msg.get(t, 0) > stale_s}
                     for t in [t for t in books if t not in wanted]:
                         del books[t]
                     try:
@@ -242,6 +253,8 @@ async def run_kalshi_ws(session: aiohttp.ClientSession, ws_url: str, private_key
                         seqs[sid] = seq
                     if kind == "error":
                         log.warning("Kalshi WS error: %s", body)
+                        if body.get("code") == 25:  # buffer overflow: el servidor descartó mensajes
+                            raise SeqGap("el servidor descartó mensajes; el libro ya no es fiable")
                     elif kind in ("orderbook_snapshot", "orderbook_delta"):
                         t = body["market_ticker"]
                         if t not in wanted:
@@ -252,6 +265,7 @@ async def run_kalshi_ws(session: aiohttp.ClientSession, ws_url: str, private_key
                         else:
                             state.apply_delta(body)
                         status["live"].add(t)
+                        last_msg[t] = time.time()
                         backoff = 1.0
                         on_book(t, kind, body, state)
                     elif kind == "cfbenchmarks_value":

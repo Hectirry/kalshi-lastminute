@@ -152,6 +152,7 @@ def arm(engine, book, secs_left=30.0):
               "open_time": iso.isoformat().replace("+00:00", "Z"), "floor_strike": 100.0}
     engine.active["BTC"] = market
     engine.last_book["BTC"] = book
+    engine.book_ts["BTC"] = now
     engine.ws_status["live"] = {"KXBTC15M-TEST"}
     last_t = (now // 1000) * 1000
     for i in range(400, -1, -1):
@@ -189,6 +190,7 @@ def test_engine_records_missed_fill_when_level_disappears(tmp_path):
         market, _ = arm(e, Book([(0.55, 500.0)], [(0.40, 500.0)]))
         e.evaluate_market("BTC", market)
         e.last_book["BTC"] = Book([(0.90, 500.0)], [(0.05, 500.0)])  # el ask de YES pasó a 0.95
+        e.book_ts["BTC"] += 20
         await asyncio.sleep(0.15)
         t = e.db.query("SELECT * FROM paper_trades")[0]
         assert (t["status"], t["miss_reason"], t["filled_contracts"], t["pnl"]) == (
@@ -259,3 +261,23 @@ def test_verdict_refuses_to_conclude_with_few_trades():
     assert "Sin veredicto" in verdict(compute([trade(4.9)] * 5))
     assert "No hay edge" in verdict(compute([trade(-5.1, ms=i) for i in range(120)]))
     assert "Sin operaciones" in verdict(compute([]))
+
+
+def test_engine_ignores_a_frozen_book(tmp_path):
+    """Un libro que dejó de actualizarse no puede generar entradas (ni fills)."""
+    async def scenario():
+        e = make_engine(tmp_path)
+        market, _ = arm(e, Book([(0.55, 500.0)], [(0.40, 500.0)]))
+        e.book_ts["BTC"] -= 10_000                         # el libro lleva 10 s congelado
+        e.evaluate_market("BTC", market)
+        e.db.flush()
+        assert e.db.query("SELECT COUNT(*) n FROM paper_trades")[0]["n"] == 0
+        assert [r["reason"] for r in e.db.query("SELECT reason FROM decisions")] == ["sin_libro"]
+        e.db.close()
+    asyncio.run(scenario())
+
+
+def test_kpis_ignore_voided_trades():
+    k = compute([trade(4.9, ms=0), trade(50.0, status="void", ms=1), trade(-5.1, ms=2)])
+    assert (k["attempts"], k["closed"]) == (2, 2)
+    assert k["pnl_net"] == pytest.approx(-0.2)

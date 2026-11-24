@@ -53,7 +53,7 @@ def analyze(trades: list[dict], bcfg: dict, n_assets: int = 1) -> dict:
     decided_ms, depth opcional). bcfg: sección `breakeven` de config.yaml."""
     closed = sorted((t for t in trades if t["status"] in ("filled", "partial")
                      and t["pnl"] is not None), key=lambda t: t["decided_ms"])
-    attempts = [t for t in trades if t["status"] != "pending"]
+    attempts = [t for t in trades if t["status"] not in ("pending", "void")]
     fixed = sum(bcfg["fixed_costs_usd"].values())
     out: dict = {"n": len(closed), "attempts": len(attempts), "fixed_costs": fixed,
                  "min_trades": bcfg["min_trades"]}

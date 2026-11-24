@@ -43,6 +43,8 @@ kalshi:
   book_poll_fast_s: 0.5         # polling REST del libro en la ventana final
   fast_window_s: 120            # ventana final: polling rápido (REST) o muestreo fino del libro (WS)
   book_sample_ms: 100           # WS, ventana final: intervalo mínimo entre snapshots guardados
+  ws_update_interval_ms: 100    # el servidor agrupa los cambios del libro cada 100 ms: 5 veces menos
+                                # tráfico (medido) y menos cortes por saturación
   book_top_levels: 10           # WS, ventana final: niveles por lado que se guardan
   settlement_poll_s: 5          # cada cuánto se consulta el resultado tras el cierre
   settlement_give_up_s: 1800    # se deja de consultar el resultado tras este tiempo
@@ -50,6 +52,7 @@ kalshi:
 engine:
   eval_interval_ms: 250         # cada cuánto se evalúa cada estrategia en cada mercado
   latency_ms: 300               # latencia simulada entre decidir y llegar al libro
+  max_book_age_ms: 3000         # un libro sin actualizar por más de esto se trata como ausente
   max_slippage: 0.0             # cuánto peor que el precio visto se acepta llenar (0 = la orden se pierde)
   index_source: oficial         # oficial (canal de Kalshi) | composite. Si el oficial falta, usa composite.
   dashboard:

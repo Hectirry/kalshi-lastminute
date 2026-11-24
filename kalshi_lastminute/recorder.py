@@ -291,7 +291,8 @@ class Recorder:
             if client.private_key is not None:
                 tasks.append(asyncio.create_task(run_kalshi_ws(
                     session, ep["ws"], client.private_key, lambda: set(self.active_tickers()),
-                    self.on_ws_book, self.on_index, self.ws_status, list(self.index_assets))))
+                    self.on_ws_book, self.on_index, self.ws_status, list(self.index_assets),
+                    self.cfg["kalshi"].get("ws_update_interval_ms"))))
             else:
                 log.info("Sin llave de API en .env: libro de Kalshi por polling REST")
             tasks += [asyncio.create_task(c) for c in self.extra_tasks(session)]

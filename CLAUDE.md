@@ -31,6 +31,10 @@ Windows; el intérprete es el del venv.
 .venv\Scripts\python -m kalshi_lastminute.summary                    # calidad de datos y error del índice
 .venv\Scripts\python -m tools.backfill [--days N]                       # histórico público -> data/history.db
 .venv\Scripts\python -m tools.calibration                               # calibración del mercado cerca del cierre
+.venv\Scripts\python -m tools.backfill --spot                           # velas 1 min de Coinbase -> data/history.db
+.venv\Scripts\python -m tools.model_test                                # ¿el modelo añade algo al precio de Kalshi?
+.venv\Scripts\python -m tools.backfill --trades 3                       # trades públicos resumidos (lento: ~1 h)
+.venv\Scripts\python -m tools.flow                                      # quién gana: tomadores o creadores de mercado
 ```
 
 - Solo puede correr un `run` o `recorder` a la vez (candado en el puerto local 47615). Los reportes y el replay abren la base en solo lectura y se pueden lanzar con el bot encendido.
@@ -61,6 +65,9 @@ kalshi_lastminute/
 tools/breakeven.py            calculadora de rentabilidad
 tools/backfill.py             descarga mercados liquidados y velas de 1 min (API pública) a data/history.db
 tools/calibration.py          calibración del precio de Kalshi y retorno de un taker por rango de precio
+tools/flowdata.py             descarga spot de Coinbase y trades públicos (agregados, no crudos)
+tools/model_test.py           modelo vs mercado: regresión de inclusión y simulación, con ajuste/prueba separados
+tools/flow.py                 P&L por contrato de tomadores y creadores de mercado
 tests/                        herméticos, sin red
 data/   reports/              bases, logs y reportes (fuera de Git)
 ```
@@ -77,8 +84,13 @@ data/   reports/              bases, logs y reportes (fuera de Git)
 - El `seq` del WebSocket de Kalshi cuenta todos los mensajes de una suscripción, incluidos los `ok`.
 - Los errores y distancias entre activos se comparan en bps, no en USD.
 - Histórico público de Kalshi: `/markets?status=settled` cubre ~2 meses; antes de `/historical/cutoff` hay que usar `/historical/markets`. `/markets/candlesticks` acepta varios tickers con tope de 10 000 velas por petición (24 mercados consecutivos). Sin firma, más de ~5 peticiones/s devuelve 429.
+- Trades públicos (`/markets/trades`): `taker_outcome_side` es el lado que COMPRÓ el tomador, al precio de ese lado (verificado contra el libro grabado). Un mercado de BTC tiene ~20 000 trades: se guardan agregados (`hist_flow`), no crudos.
+- Un libro por deltas que deja de recibir mensajes queda congelado y muestra precios que ya no existen. El 2026-11-22 eso generó 5 operaciones con ganancia falsa. Defensas que no se quitan: reconexión ante `seq` roto o error 25 del servidor, `engine.max_book_age_ms`, y el test `test_engine_ignores_a_frozen_book`. Ante un P&L sorprendentemente bueno, sospecha primero del libro.
+- Operaciones anuladas por fallos del bot: `status='void'` con la causa en `miss_reason`; se conservan, pero KPIs, calculadora y dashboard las excluyen.
+- `kalshi.ws_update_interval_ms: 100` hace que el servidor agrupe los deltas (5 veces menos tráfico, medido). Sin eso la conexión se satura.
 - `data/history.db` es una base aparte de la del bot: no escribas histórico en `kalshi_lastminute.db` mientras el bot corre.
 - Resultado de referencia (19 689 mercados, sep–nov 2026): el precio está bien calibrado de 1 a 10 min del cierre y comprar al ask pierde en todos los rangos de precio. Una variante que solo use el precio de Kalshi no tiene edge; solo vale la pena probar información que el precio aún no refleje.
+- Segundo resultado de referencia (mismos mercados, prueba fuera de muestra): el modelo de volatilidad no añade información al precio de Kalshi de 1 a 10 min del cierre (coeficiente 0.05 ± 0.05). Cuando ve 12¢ de edge, el P&L real es −0.6¢. No vale la pena afinar sus parámetros.
 
 ## Convenciones
 

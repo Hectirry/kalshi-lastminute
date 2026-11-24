@@ -59,6 +59,13 @@ class Engine(Recorder):
         s = self.series[asset][order[-1]]
         return [(t, v) for t, v, _ in s], (now - s[-1][2]) if s else None, order[-1]
 
+    def fresh_book(self, asset: str, now: int):
+        """El libro, solo si se actualizó hace poco. Un libro congelado inventa precios
+        que ya no existen (pasó el 2026-11-22: 5 operaciones con ganancia falsa)."""
+        if now - self.book_ts.get(asset, 0) > self.ecfg["max_book_age_ms"]:
+            return None
+        return self.last_book[asset]
+
     # ── estrategia ──────────────────────────────────────────────────────
     async def strategy_loop(self, asset: str) -> None:
         interval = self.ecfg["eval_interval_ms"] / 1000.0
@@ -77,7 +84,7 @@ class Engine(Recorder):
         points, age, source = self.index_view(asset, now)
         ctx = Context(asset=asset, ticker=m["ticker"], now_ms=now,
                       close_ms=iso_to_ms(m["close_time"]), strike=m.get("floor_strike"),
-                      index_points=points, index_age_ms=age, book=self.last_book[asset],
+                      index_points=points, index_age_ms=age, book=self.fresh_book(asset, now),
                       fees=self.cfg["fees"], window_s=self.cfg["settlement"]["window_s"])
         for strat in self.strategies:
             d = strat.evaluate(ctx, strat.params)
@@ -144,7 +151,7 @@ class Engine(Recorder):
         if t1 >= close_ms or m is None or m["ticker"] != ticker:
             reason = "mercado_cerrado"
         elif ticker in self.ws_status.get("live", ()):
-            book = self.last_book[asset]  # el libro por WebSocket está al día
+            book = self.fresh_book(asset, t1)  # el libro por WebSocket está al día
         else:
             # Con polling REST hay que esperar un libro leído después de t1.
             deadline = time.time() + 2.0

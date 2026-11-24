@@ -107,6 +107,10 @@ Todos se escriben en `reports/` y se imprimen en consola.
 | `python -m kalshi_lastminute.summary` | (consola) | Calidad de los datos grabados y error del índice |
 | `python -m tools.backfill` | `data/history.db` | Descarga ~2 meses de mercados liquidados y velas de 1 minuto de la API pública de Kalshi |
 | `python -m tools.calibration` | `calibracion_mercado.md` | Si el precio de Kalshi está bien calibrado cerca del cierre y qué gana un taker por rango de precio |
+| `python -m tools.backfill --spot` | `data/history.db` | Velas de 1 minuto de Coinbase para el mismo periodo |
+| `python -m tools.model_test` | `modelo_vs_mercado.md` | Si nuestro modelo sabe algo que el precio de Kalshi no sepa |
+| `python -m tools.backfill --trades 3` | `data/history.db` | Todos los trades públicos de los últimos 3 días, resumidos (tarda cerca de una hora) |
+| `python -m tools.flow` | `quien_gana.md` | Cuánto ganan por contrato quienes toman liquidez y quienes la ofrecen |
 
 ### Cómo leer `kpis.md` y `replay_*.md`
 
@@ -126,6 +130,22 @@ Usa el histórico público, no nuestra grabación: miles de mercados, pero con u
 - **Calibración**: para cada rango de precio de YES, qué fracción cerró YES. Si la columna `z` queda entre −2 y 2, el precio es un buen estimador y no hay sesgo que explotar.
 - **Comprar al ask como taker**: P&L medio por contrato, neto de fees, según el precio pagado. Un rango solo interesa si todo su intervalo de confianza es positivo (marcado con ✔) y además se repite en varios horizontes.
 - Lo negativo aquí es negativo de verdad. Lo positivo es un techo: en vivo hay que restarle la latencia y la profundidad.
+
+### Cómo leer `modelo_vs_mercado.md`
+
+Compara tres pronósticos sobre mercados que el ajuste nunca vio: el precio de Kalshi, nuestro modelo y una mezcla.
+
+- **Coeficiente del modelo**: su peso en la mezcla una vez que ya se conoce el precio. Si no supera dos veces su error, el modelo no añade información.
+- **Edge esperado vs P&L real**: lo que el modelo creía ganar al comprar y lo que habría ganado. Si el esperado es grande y el real ronda cero, las discrepancias con el mercado son errores del modelo, no oportunidades.
+
+### Cómo leer `quien_gana.md`
+
+Suma todos los trades reales. En cada uno hay un tomador (cruza el spread y paga fee) y un creador de mercado (tenía la orden puesta; sin fee en estas series).
+
+- **Tomador bruto negativo**: cruzar el spread pierde incluso sin fee; la ventaja está del lado de quien ofrece liquidez.
+- **Tomador bruto positivo pero menor que el fee**: los tomadores saben algo, pero el fee se lo lleva.
+- **Tomador neto positivo**: sería la única señal de que tomar liquidez paga.
+- Es el promedio de todos los participantes de cada lado. Un creador de mercado lento gana menos que ese promedio.
 
 ### Cómo leer `breakeven.md`
 
@@ -157,6 +177,8 @@ Crece del orden de cientos de MB por día.
 - En la ventana final el libro se muestrea cada 100 ms, no en cada cambio.
 - El modelo de probabilidad es un paseo aleatorio gaussiano con la volatilidad de los últimos 5 minutos. No ajusta por colas gordas.
 - Un solo intento de entrada por mercado y variante: si la orden se pierde, no reintenta.
+- El índice oficial de SOL llega redondeado a centavos (unos 1.4 bps), así que cerca del strike el modelo ve menos que el mercado.
+- Las operaciones con estado `void` son las anuladas por un fallo del propio bot (se conservan para auditoría y no cuentan en ningún KPI).
 - No está confirmado que los términos de Kalshi permitan operar a un residente en Colombia (`docs/RESEARCH.md` §4).
 
 ## Más

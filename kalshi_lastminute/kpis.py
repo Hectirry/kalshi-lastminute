@@ -10,7 +10,8 @@ MIN_TRADES_FOR_VERDICT = 100
 def compute(trades: list[dict]) -> dict:
     """trades: dicts con status, side, filled_contracts, fill_price, fee, pnl,
     model_prob, edge_net, decided_ms. Devuelve los KPIs de un conjunto."""
-    attempts = [t for t in trades if t["status"] != "pending"]
+    # 'void': operaciones anuladas por un fallo conocido del propio bot; no cuentan.
+    attempts = [t for t in trades if t["status"] not in ("pending", "void")]
     missed = [t for t in attempts if t["status"] == "missed"]
     filled = [t for t in attempts if t["status"] in ("filled", "partial")]
     closed = sorted((t for t in filled if t["pnl"] is not None), key=lambda t: t["decided_ms"])

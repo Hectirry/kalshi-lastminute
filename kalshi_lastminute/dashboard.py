@@ -48,7 +48,7 @@ def state(engine) -> dict:
         "SUM(CASE WHEN status IN ('filled','partial') AND pnl IS NULL THEN 1 ELSE 0 END) abiertas, "
         "SUM(CASE WHEN pnl > 0 THEN 1 ELSE 0 END) ganadas, "
         "SUM(CASE WHEN status IN ('filled','partial') AND pnl IS NOT NULL THEN 1 ELSE 0 END) cerradas, "
-        "COALESCE(SUM(pnl), 0) pnl FROM paper_trades GROUP BY strategy")]
+        "COALESCE(SUM(pnl), 0) pnl FROM paper_trades WHERE status != 'void' GROUP BY strategy")]
     trades = [dict(r) for r in engine.db.query(
         "SELECT decided_ms, strategy, asset, ticker, side, status, miss_reason, requested_contracts, "
         "filled_contracts, decision_price, fill_price, fee, model_prob, edge_net, pnl "

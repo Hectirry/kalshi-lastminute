@@ -89,7 +89,7 @@ CREATE TABLE IF NOT EXISTS paper_trades (
     side                TEXT NOT NULL,
     decided_ms          INTEGER NOT NULL,
     fill_ms             INTEGER,
-    status              TEXT NOT NULL,  -- 'pending' | 'filled' | 'partial' | 'missed'
+    status              TEXT NOT NULL,  -- 'pending' | 'filled' | 'partial' | 'missed' | 'void'
     requested_contracts REAL NOT NULL,
     filled_contracts    REAL NOT NULL DEFAULT 0,
     decision_price      REAL NOT NULL,

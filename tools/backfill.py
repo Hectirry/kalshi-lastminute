@@ -6,6 +6,8 @@ Es reanudable: lo ya descargado no se vuelve a pedir. Solo lectura, sin llave.
 Uso:
     python -m tools.backfill                 # todo lo disponible en el endpoint "vivo" (~2 meses)
     python -m tools.backfill --days 14
+    python -m tools.backfill --spot          # velas de 1 min de Coinbase (para probar el modelo)
+    python -m tools.backfill --trades 3      # trades de los últimos 3 días, resumidos
 """
 from __future__ import annotations
 
@@ -169,7 +171,19 @@ async def backfill(days: float | None) -> None:
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--days", type=float, default=None, help="solo los últimos N días")
-    asyncio.run(backfill(ap.parse_args().days))
+    ap.add_argument("--spot", action="store_true",
+                    help="descargar velas de 1 min de Coinbase para el rango ya descargado")
+    ap.add_argument("--trades", type=float, default=None, metavar="DIAS",
+                    help="descargar y resumir los trades de los últimos DIAS días")
+    args = ap.parse_args()
+    if args.spot or args.trades:
+        from tools import flowdata
+        if args.spot:
+            asyncio.run(flowdata.download_spot(connect()))
+        if args.trades:
+            asyncio.run(flowdata.download_flow(connect(), args.trades))
+        return
+    asyncio.run(backfill(args.days))
 
 
 if __name__ == "__main__":
